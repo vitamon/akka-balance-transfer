@@ -2,42 +2,72 @@ package io.example
 
 import akka.actor._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
-import akka.http.scaladsl.server.{Directives, Route}
-import akka.pattern.ask
-import akka.stream.Materializer
-import io.example.actors.SessionRouterActor
-import io.example.domain.AccountEvents._
+import akka.http.scaladsl.model.StatusCodes
+import akka.http.scaladsl.server.{Directives, ExceptionHandler, Route}
+import akka.pattern.{AskTimeoutException, ask}
+import akka.stream.ActorMaterializer
+import akka.util.Timeout
+import com.typesafe.scalalogging.LazyLogging
+import io.example.actors.RequestRouterActor
+import io.example.domain.ApiMessages._
+import io.example.persist.Persistence
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import spray.json.{DefaultJsonProtocol, _}
+import scala.util.control.NonFatal
+import spray.json.DefaultJsonProtocol
 
-trait HttpService extends DefaultJsonProtocol with Directives with SprayJsonSupport {
+trait HttpService extends DefaultJsonProtocol with Directives with SprayJsonSupport with LazyLogging {
 
   implicit val system: ActorSystem
-  implicit val materializer: Materializer
+  implicit val materializer: ActorMaterializer
   implicit val ec: ExecutionContext
 
-  lazy val sessionRouterActor = system.actorOf(Props(new SessionRouterActor()))
+  val eventLogService: Persistence
 
-  implicit val operationTimeout = 30.seconds
+  lazy val requestRouterActor = system.actorOf(Props(new RequestRouterActor(eventLogService)), "RequestRouter")
+
+  implicit val operationTimeout: Timeout = 30.seconds
+
+  implicit def domainExceptionHandler = {
+    ExceptionHandler {
+
+      case e: AskTimeoutException =>
+        complete(StatusCodes.InternalServerError -> "Request Timeout")
+
+      case e: DomainException =>
+        complete(StatusCodes.BadRequest -> e.getMessage)
+
+      case NonFatal(ex) =>
+        complete(StatusCodes.InternalServerError -> ex.getMessage)
+    }
+  }
 
   lazy val mainRoute: Route =
     pathPrefix("accounts") {
-      path(Segment) { accountId =>
-
-        (get & path("balance")) {
+      pathPrefix(Segment) { accountId =>
+        (get & pathEndOrSingleSlash) {
           complete {
-            (sessionRouterActor ? GetBalanceRequest(accountId)).mapTo[AccountResponse].map(_.toJson)
+            (requestRouterActor ? AccountSummaryRequest(accountId)).mapTo[ApiResponse].map(_.toString)
           }
         } ~
+        put {
+          complete {
+            (requestRouterActor ? CreateAccountRequest(accountId)).mapTo[ApiResponse].map(_.toString)
+          }
+        } ~
+          (get & path("balance")) {
+            complete {
+              (requestRouterActor ? GetBalanceRequest(accountId)).mapTo[ApiResponse].map(_.toString)
+            }
+          } ~
           (post & path("deposit") & parameter('amount.as[Double])) { amount =>
             complete {
-              (sessionRouterActor ? DepositRequest(accountId, amount)).mapTo[AccountResponse].map(_.toJson)
+              (requestRouterActor ? DepositOrWithdrawRequest(accountId, amount)).mapTo[ApiResponse].map(_.toString)
             }
           } ~
           (post & path("transfer" / Segment) & parameter('amount.as[Double])) { (receivingAccount, amount) =>
             complete {
-              (sessionRouterActor ? TransferRequest(accountId, receivingAccount, amount)).mapTo[AccountResponse].map(_.toJson)
+              (requestRouterActor ? TransferRequest(accountId, receivingAccount, amount)).mapTo[ApiResponse].map(_.toString)
             }
           }
       }

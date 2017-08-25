@@ -5,16 +5,25 @@ import akka.http.scaladsl.Http
 import akka.stream.ActorMaterializer
 import com.typesafe.config.ConfigFactory
 import com.typesafe.scalalogging.LazyLogging
+import io.example.persist.InMemoryPersistenceImpl
 import scala.concurrent.ExecutionContext
 
-object Boot extends App with LazyLogging with HttpService {
+object Boot extends App with AccountingAppServer {}
 
-  val config = ConfigFactory.load()
+trait AccountingAppServer extends HttpService with LazyLogging {
 
-  implicit val system = ActorSystem("support-admin-server", config)
+  lazy val config = ConfigFactory.load()
+
+  implicit val system = ActorSystem("account-transfers", config)
   implicit val materializer = ActorMaterializer()
   implicit val ec: ExecutionContext = ExecutionContext.global
 
-  val serverF = Http().bindAndHandle(mainRoute, interface = "localhost", port = 8080)
+  lazy val eventLogService = new InMemoryPersistenceImpl
 
+  val serverF = Http().bindAndHandle(mainRoute, interface = "0.0.0.0", port = 8080)
+
+  def shutdown(): Unit = {
+    serverF.flatMap(_.unbind())
+      .onComplete(_ => system.terminate())
+  }
 }

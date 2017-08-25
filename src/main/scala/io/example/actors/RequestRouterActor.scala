@@ -2,19 +2,19 @@ package io.example.actors
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Terminated}
 import io.example.domain.AccountDomain.AccountId
-import io.example.domain.AccountEvents.AccountEvent
+import io.example.domain.ApiMessages.ApiRequest
+import io.example.persist.Persistence
 import scala.collection.mutable
-import scala.concurrent.ExecutionContext
 
 /**
   * Keeps track of existing account actors,
   * makes sure that for each account we have only single managing actor (but this is not required)
+  *
+  * TODO: keep track of actor's last activity time and kill the idle actors after some timeout
   */
-class SessionRouterActor extends Actor with ActorLogging {
+class RequestRouterActor(eventLogService: Persistence) extends Actor with ActorLogging {
 
   val accounts = mutable.AnyRefMap.empty[AccountId, ActorRef]
-
-  implicit val ec = ExecutionContext.Implicits.global
 
   override def receive: Receive = {
 
@@ -24,10 +24,12 @@ class SessionRouterActor extends Actor with ActorLogging {
         accounts -= id
       }
 
-    case e: AccountEvent =>
-      val handler = accounts.getOrElse(e.id, {
-        val h = context.actorOf(Props(new AccountHandlerActor(e.id)))
-        accounts += e.id -> h
+    case e: ApiRequest =>
+      log.debug(e.toString)
+
+      val handler = accounts.getOrElse(e.ownerId, {
+        val h = context.actorOf(Props(new AccountHandlerActor(e.ownerId, eventLogService)), "Account" + e.ownerId)
+        accounts += e.ownerId -> h
         h
       })
       handler.forward(e)
