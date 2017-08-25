@@ -2,7 +2,7 @@ package io.example.actors
 
 import akka.actor.{Actor, ActorLogging, ActorRef, Props, Terminated}
 import io.example.domain.AccountDomain.AccountId
-import io.example.domain.ApiMessages.ApiRequest
+import io.example.domain.ApiMessages.{ApiRequest, TransferRequest}
 import io.example.persist.Persistence
 import scala.collection.mutable
 

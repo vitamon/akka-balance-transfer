@@ -70,11 +70,20 @@ class AccountHandlerActor(ownerId: AccountId, persistence: Persistence) extends 
 
     case d @ TransferRequest(_, receiverId, amount) =>
 
-      if (AccountDomain.isValidUpdate(state.balance, -amount)) {
-        context.parent ! TransferReceiverRequest(receiverId, d, state) // receiver account will complete the transaction
-        context become waitingForPersistCompleted(state, sender())
+      if (ownerId == receiverId) {
+        sender ! Status.Failure(GenericDomainException("Sender and receiver are equal"))
+      }
+      else if (ownerId < receiverId) {
+        // prevent deadlock by sorting accountIds lexicographically
+        // ownerId should be > receiverId
+        context.parent.forward(TransferRequest(receiverId, ownerId, -amount))
       } else {
-        sender ! Status.Failure(NotEnoughFundsException)
+        if (AccountDomain.isValidUpdate(state.balance, -amount)) {
+          context.parent ! TransferReceiverRequest(receiverId, d, state) // receiver account will complete the transaction
+          context become waitingForPersistCompleted(state, sender())
+        } else {
+          sender ! Status.Failure(NotEnoughFundsException)
+        }
       }
 
     case d @ TransferReceiverRequest(_, request, sourceAccountState) =>

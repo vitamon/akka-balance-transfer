@@ -38,7 +38,7 @@ object AccountDomain {
   def prepareTransfer(source: AccountEntry, receiver: AccountEntry,
     amount: Currency): Try[List[AccountEntry]] = {
     Try {
-      if (isValidUpdate(source.balance, -amount)) {
+      if (isValidUpdate(source.balance, -amount) && isValidUpdate(receiver.balance, amount)) {
         List(
           AccountEntry(
             account = source.account,
