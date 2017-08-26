@@ -1,8 +1,6 @@
-Another approach to balance transfer transaction can be based on Compare and Set pattern and specially calculated transaction ids. 
+CAS+blockchain solution is based on Compare and Set pattern and specially calculated transaction ids. 
 This approach heavily relies on database with ACID guarantees (so not easily scalable), 
 but does not require actors, just plain futures, while solving the deadlock problem naturally. 
-
-Main ideas:
 
 1. We need a database which provides atomic write(list) and unique index for transactionId.
    So it throws if the key already exists.
