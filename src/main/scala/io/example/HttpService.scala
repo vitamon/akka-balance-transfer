@@ -4,11 +4,11 @@ import akka.actor._
 import akka.http.scaladsl.marshallers.sprayjson.SprayJsonSupport
 import akka.http.scaladsl.model.StatusCodes
 import akka.http.scaladsl.server.{Directives, ExceptionHandler, Route}
-import akka.pattern.{AskTimeoutException, ask}
+import akka.pattern.AskTimeoutException
 import akka.stream.ActorMaterializer
 import akka.util.Timeout
 import com.typesafe.scalalogging.LazyLogging
-import io.example.actors.RequestRouterActor
+import io.example.service.ApiService
 import io.example.domain.ApiMessages._
 import io.example.persist.Persistence
 import scala.concurrent.ExecutionContext
@@ -24,7 +24,7 @@ trait HttpService extends DefaultJsonProtocol with Directives with SprayJsonSupp
 
   val eventLogService: Persistence
 
-  lazy val requestRouterActor = system.actorOf(Props(new RequestRouterActor(eventLogService)), "RequestRouter")
+  lazy val apiService = new ApiService(eventLogService)
 
   implicit val operationTimeout: Timeout = 30.seconds
 
@@ -38,6 +38,7 @@ trait HttpService extends DefaultJsonProtocol with Directives with SprayJsonSupp
         complete(StatusCodes.BadRequest -> e.getMessage)
 
       case NonFatal(ex) =>
+        logger.error(ex.getMessage)
         complete(StatusCodes.InternalServerError -> ex.getMessage)
     }
   }
@@ -47,27 +48,27 @@ trait HttpService extends DefaultJsonProtocol with Directives with SprayJsonSupp
       pathPrefix(Segment) { accountId =>
         (get & pathEndOrSingleSlash) {
           complete {
-            (requestRouterActor ? AccountSummaryRequest(accountId)).mapTo[ApiResponse].map(_.toString)
+            apiService.summary(accountId).map(_.toString)
           }
         } ~
         put {
           complete {
-            (requestRouterActor ? CreateAccountRequest(accountId)).mapTo[ApiResponse].map(_.toString)
+            apiService.createAccount(accountId).map(_.toString)
           }
         } ~
           (get & path("balance")) {
             complete {
-              (requestRouterActor ? GetBalanceRequest(accountId)).mapTo[ApiResponse].map(_.toString)
+              apiService.balance(accountId).map(_.toString)
             }
           } ~
           (post & path("deposit") & parameter('amount.as[Double])) { amount =>
             complete {
-              (requestRouterActor ? DepositOrWithdrawRequest(accountId, amount)).mapTo[ApiResponse].map(_.toString)
+              apiService.deposit(DepositOrWithdrawRequest(accountId, amount)).map(_.toString)
             }
           } ~
           (post & path("transfer" / Segment) & parameter('amount.as[Double])) { (receivingAccount, amount) =>
             complete {
-              (requestRouterActor ? TransferRequest(accountId, receivingAccount, amount)).mapTo[ApiResponse].map(_.toString)
+              apiService.transfer(TransferRequest(accountId, receivingAccount, amount)).map(_.toString)
             }
           }
       }

@@ -3,6 +3,7 @@ package io.example.domain
 import io.example.domain.AccountDomain.{AccountId, Currency, TransactionId}
 import io.example.domain.AccountEntity.AccountEntry
 import io.example.domain.ApiMessages.NotEnoughFundsException
+import java.util.UUID
 import org.apache.commons.codec.digest.DigestUtils
 import scala.util.Try
 
@@ -23,6 +24,7 @@ object AccountDomain {
     Try {
       if (isValidUpdate(acc.balance, amount)) {
         AccountEntry(
+          id = acc.getDigest,
           account = acc.account,
           balance = acc.balance + amount,
           amount = amount,
@@ -41,6 +43,7 @@ object AccountDomain {
       if (isValidUpdate(source.balance, -amount) && isValidUpdate(receiver.balance, amount)) {
         List(
           AccountEntry(
+            id = source.getDigest,
             account = source.account,
             balance = source.balance - amount,
             amount = -amount,
@@ -50,6 +53,7 @@ object AccountDomain {
           ),
 
           AccountEntry(
+            id = receiver.getDigest,
             account = receiver.account,
             balance = receiver.balance + amount,
             amount = amount,
@@ -66,6 +70,7 @@ object AccountDomain {
 
   def prepareCreateAccount(ownerId: AccountId): AccountEntry = {
     AccountEntry(
+      id = UUID.randomUUID().toString,
       account = ownerId,
       balance = 0,
       amount = 0,
@@ -87,6 +92,7 @@ object AccountEntity {
   case object Transfer extends TransactionType
 
   case class AccountEntry(
+    id: TransactionId,
     account: AccountId,
     previousTransactionId: Option[TransactionId],
     balance: Currency,
@@ -95,8 +101,6 @@ object AccountEntity {
     otherParty: Option[AccountId] = None, // None for deposit/withdraw
     timestamp: Long = System.nanoTime()
   ) {
-    val id = getDigest
-
     def getDigest = DigestUtils.sha1Hex(toString)
 
     def asString: String = s"""$timestamp|$id|$account|$operation|$amount|$balance|${otherParty.getOrElse("-")}|$previousTransactionId"""
@@ -107,21 +111,12 @@ object AccountEntity {
 object ApiMessages {
 
   sealed trait ApiRequest {
-    val ownerId: AccountId
+    val originId: AccountId
   }
 
-  case class CreateAccountRequest(ownerId: AccountId) extends ApiRequest
+  case class DepositOrWithdrawRequest(originId: AccountId, amount: Currency) extends ApiRequest
 
-  case class AccountSummaryRequest(ownerId: AccountId) extends ApiRequest
-
-  case class GetBalanceRequest(ownerId: AccountId) extends ApiRequest
-
-  case class DepositOrWithdrawRequest(ownerId: AccountId, amount: Currency) extends ApiRequest
-
-  case class TransferRequest(ownerId: AccountId, receiverId: AccountId, amount: Currency) extends ApiRequest
-
-  case class TransferReceiverRequest(ownerId: AccountId, r: TransferRequest,
-    sourceAccount: AccountEntry) extends ApiRequest
+  case class TransferRequest(originId: AccountId, receiverId: AccountId, amount: Currency) extends ApiRequest
 
 
   sealed trait ApiResponse
@@ -132,18 +127,21 @@ object ApiMessages {
     override def toString = summary
   }
 
-  class DomainException(message: String) extends RuntimeException(message) with ApiResponse
+  abstract class DomainException(message: String) extends RuntimeException(message) with ApiResponse
+
+  case class GeneralDomainException(msg: String) extends DomainException(msg)
 
   case object NotEnoughFundsException extends DomainException("Not enough funds")
 
-  case object AccountDoesNotExistException extends DomainException("Account does not exist")
+  case class AccountDoesNotExist(id: AccountId) extends DomainException("Account does not exist " + id)
+
+  case object AccountAlreadyExists extends DomainException("Account already exists")
 
   case object TransactionFailureException extends DomainException("Transaction failure, please retry later")
 
   case class InconsistentEntryException(
     entry: AccountEntry) extends DomainException(s"The entry with id = ${entry.id} was changed since it was saved: " + entry.toString)
 
-  case class GenericDomainException(msg: String) extends DomainException(msg)
 }
 
 

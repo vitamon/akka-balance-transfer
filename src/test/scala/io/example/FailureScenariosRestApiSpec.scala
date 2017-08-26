@@ -54,7 +54,7 @@ class FailureScenariosRestApiSpec
           }
         }.recover {
           case NonFatal(ex) =>
-            PersistFailure(ex.getMessage, items)
+            PersistFailure(ex)
         }
       }
     }

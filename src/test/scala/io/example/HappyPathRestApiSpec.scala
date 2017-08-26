@@ -41,7 +41,7 @@ class HappyPathRestApiSpec
         method("PUT").
         asString
       resp.code === 400
-      resp.body === "Unknown or Not Permitted Operation CreateAccountRequest(123)"
+      resp.body === "Account already exists"
     }
 
     "get balance" in {
@@ -51,7 +51,7 @@ class HappyPathRestApiSpec
     "fail to get balance from non-existing account" in {
       val resp = Http(balanceUrl(nonExistingAccountId)).asString
       resp.code === 400
-      resp.body === s"Account does not exist"
+      resp.body === s"Account does not exist $nonExistingAccountId"
     }
 
     "deposit" in {
@@ -121,7 +121,7 @@ class HappyPathRestApiSpec
         asString
 
       resp.code === 400
-      resp.body === "Account does not exist"
+      resp.body === s"Account does not exist $nonExistingAccountId"
 
       getBalance(accountId) === s"BalanceResponse($accountId,90.23)"
     }
@@ -133,7 +133,7 @@ class HappyPathRestApiSpec
         asString
 
       resp.code === 400
-      resp.body === "Account does not exist"
+      resp.body === s"Account does not exist $nonExistingAccountId"
 
       getBalance(accountId) === s"BalanceResponse($accountId,90.23)"
     }
