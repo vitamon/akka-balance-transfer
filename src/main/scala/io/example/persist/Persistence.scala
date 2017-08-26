@@ -27,7 +27,7 @@ trait Persistence {
 
 class InMemoryPersistenceImpl extends Persistence with LazyLogging {
 
-  private var eventLog = new ConcurrentHashMap[AccountId, List[AccountEntry]]().asScala
+  private val eventLog = new ConcurrentHashMap[AccountId, List[AccountEntry]]().asScala
 
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
