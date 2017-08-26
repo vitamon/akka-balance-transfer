@@ -4,7 +4,6 @@ import com.typesafe.scalalogging.LazyLogging
 import io.example.domain.AccountDomain.AccountId
 import io.example.domain.AccountEntity.AccountEntry
 import java.util.concurrent.ConcurrentHashMap
-import java.util.function.BiFunction
 import scala.concurrent.{ExecutionContext, Future, blocking}
 import scala.util.control.NonFatal
 
@@ -32,15 +31,12 @@ class InMemoryPersistenceImpl extends Persistence with LazyLogging {
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
   def save(items: List[AccountEntry]): Future[PersistResult] = {
-    Future {
-      blocking {
-        items.foreach { e =>
-          eventLog.putIfAbsent(e.account, Nil)
-          eventLog.compute(e.account, new BiFunction[String, List[AccountEntry], List[AccountEntry]] {
-            override def apply(t: String, lst: List[AccountEntry]): List[AccountEntry] = {
-              e :: lst
-            }
-          })
+    {
+      Future {
+        blocking {
+          items.foreach { e =>
+            eventLog.put(e.account, e :: eventLog.getOrDefault(e.account, Nil))
+          }
         }
         PersistSuccess(items)
       }
