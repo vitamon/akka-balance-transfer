@@ -8,6 +8,7 @@ import io.example.domain.AccountEntity.AccountEntry
 import io.example.domain.ApiMessages._
 import io.example.domain.{AccountDomain, AccountEntity}
 import io.example.persist._
+import scala.concurrent.duration._
 import scala.concurrent.{ExecutionContext, Future}
 import scala.util.control.NonFatal
 import scala.util.{Failure, Success}
@@ -35,6 +36,12 @@ class AccountHandlerActor(ownerId: AccountId, persistence: Persistence) extends 
     case None =>
       context become noCreatedAccountState
       unstashAll()
+
+    case ex: Status.Failure =>
+      log.error("Unable to read the snapshot, will retry in 1 sec " + ex)
+      context.system.scheduler.scheduleOnce(1.second) {
+        syncState()
+      }
 
     case _ =>
       stash() // postpone all other events
@@ -165,7 +172,7 @@ class AccountHandlerActor(ownerId: AccountId, persistence: Persistence) extends 
   def retrieveTheChainOfOperations(ownerId: String, txIdOpt: Option[String],
     entries: List[AccountEntry]): Future[List[AccountEntry]] = {
     txIdOpt.fold(Future.successful(entries)) { txId =>
-      persistence.getByTransactionId(ownerId, txId) flatMap {
+      persistence.getByTransactionId(ownerId, txId).flatMap {
         case None =>
           Future.successful(entries)
 
@@ -177,6 +184,10 @@ class AccountHandlerActor(ownerId: AccountId, persistence: Persistence) extends 
           } else {
             retrieveTheChainOfOperations(ownerId, olderEntry.previousTransactionId, olderEntry :: entries)
           }
+      }.recover {
+        case NonFatal(ex) =>
+          log.error(s"Unable to read entry $ownerId, $txId")
+          throw GenericDomainException(s"Unable to read entry $ownerId, $txId")
       }
     }
   }
