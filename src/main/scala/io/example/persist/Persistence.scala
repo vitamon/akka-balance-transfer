@@ -15,8 +15,11 @@ case class PersistSuccess(events: List[AccountEntry]) extends PersistResult
 case class PersistFailure(message: String,
   events: List[AccountEntry]) extends RuntimeException(message) with PersistResult
 
+case class DuplicateIndexException(message: String) extends RuntimeException(message)
+
 trait Persistence {
   // should be atomic
+  // should throw if the id is not unique
   def save(items: List[AccountEntry]): Future[PersistResult]
 
   def getLatestSnapshot(ownerId: AccountId): Future[Option[AccountEntry]]
@@ -35,12 +38,17 @@ class InMemoryPersistenceImpl extends Persistence with LazyLogging {
     Future {
       blocking {
         items.foreach { e =>
+
           eventLog.putIfAbsent(e.account, Nil)
-          eventLog.compute(e.account, new BiFunction[String, List[AccountEntry], List[AccountEntry]] {
+          eventLog.computeIfPresent(e.account, new BiFunction[String, List[AccountEntry], List[AccountEntry]] {
             override def apply(t: String, lst: List[AccountEntry]): List[AccountEntry] = {
+              if (lst.exists(_.id == e.id)) {
+                throw DuplicateIndexException(s"Transaction Index ${e.id} already exists")
+              }
               e :: lst
             }
           })
+
         }
         PersistSuccess(items)
       }
