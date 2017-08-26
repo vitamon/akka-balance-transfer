@@ -7,12 +7,13 @@ but does not require actors, just plain futures, while solving the deadlock prob
 
 2. We calculate transaction Id as the hash of previous transaction object.
    i.e. txId = sha1(lastEntry.toString). For the first transaction in the list txId is just a random uuid.
-   So the hash of previous entry is the id of the next one (aka blockchain)
-   It allows to easy to check whether this entry is last or not.
+   
+   So the hash of previous entry is the id of the next one (aka blockchain).
+   It allows to easily check whether this entry is last or not.
  
 3. Implement Compare and Set pattern using the db:
     - load two entries
-    - prepare two new entries with transaction ids equal to hashes of the previous entries
+    - prepare the two new entries with transaction ids equal to hashes of the previous entries
     - try to save the both entries into the db
     - if transaction succeeds -- we are good
     - if by the time of the save any of the accounts was updated, we will have the transaction ids already in the db,
