@@ -28,3 +28,23 @@ To run the server:
 
 To run the tests:
 `sbt test`
+
+----------------------------
+
+Another, perhaps even simpler approach, which doesn't require actors, just plain futures,
+while solving deadlock problem naturally.
+
+1. We need a database which provides atomic write(list) and unique index by transactionId.
+   So it throws if the key already exists.
+
+2. We build transaction Id which is the hash of previous transaction object.
+   i.e. txId = sha1(lastEntry.toString). For the first transaction in the list txId is just a random uuid.
+ 
+3. Implement Compare and Set pattern using the database:
+    - load two entries
+    - prepare two new entries with transaction ids equal to hashes of the previous entries
+    - try to save both entries into the db
+    - if transaction succeeds -- we are good
+    - if by the time of the save any of the accounts was updated, we will have the transaction ids already in the db,
+      so it will throw DuplicateKeyException. So we should just start the transaction from the beginning.
+      
