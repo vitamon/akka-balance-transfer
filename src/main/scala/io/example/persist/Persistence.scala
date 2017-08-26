@@ -4,7 +4,7 @@ import com.typesafe.scalalogging.LazyLogging
 import io.example.domain.AccountDomain.AccountId
 import io.example.domain.AccountEntity.AccountEntry
 import java.util.concurrent.ConcurrentHashMap
-import scala.collection.JavaConverters._
+import java.util.function.BiFunction
 import scala.concurrent.{ExecutionContext, Future, blocking}
 import scala.util.control.NonFatal
 
@@ -27,7 +27,7 @@ trait Persistence {
 
 class InMemoryPersistenceImpl extends Persistence with LazyLogging {
 
-  private val eventLog = new ConcurrentHashMap[AccountId, List[AccountEntry]]().asScala
+  private val eventLog = new ConcurrentHashMap[AccountId, List[AccountEntry]]()
 
   implicit val ec: ExecutionContext = ExecutionContext.Implicits.global
 
@@ -35,7 +35,12 @@ class InMemoryPersistenceImpl extends Persistence with LazyLogging {
     Future {
       blocking {
         items.foreach { e =>
-          eventLog += e.account -> (e :: eventLog.getOrElse(e.account, Nil))
+          eventLog.putIfAbsent(e.account, Nil)
+          eventLog.compute(e.account, new BiFunction[String, List[AccountEntry], List[AccountEntry]] {
+            override def apply(t: String, lst: List[AccountEntry]): List[AccountEntry] = {
+              e :: lst
+            }
+          })
         }
         PersistSuccess(items)
       }
@@ -48,7 +53,7 @@ class InMemoryPersistenceImpl extends Persistence with LazyLogging {
   def getLatestSnapshot(ownerId: AccountId): Future[Option[AccountEntry]] = {
     Future {
       blocking {
-        eventLog.getOrElse(ownerId, Nil).headOption
+        eventLog.getOrDefault(ownerId, Nil).headOption
       }
     }
   }
@@ -56,7 +61,7 @@ class InMemoryPersistenceImpl extends Persistence with LazyLogging {
   def getByTransactionId(ownerId: AccountId, id: String): Future[Option[AccountEntry]] = {
     Future {
       blocking {
-        eventLog.getOrElse(ownerId, Nil).find(_.id == id)
+        eventLog.getOrDefault(ownerId, Nil).find(_.id == id)
       }
     }
   }

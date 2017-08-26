@@ -77,8 +77,8 @@ class AccountHandlerActor(ownerId: AccountId, persistence: Persistence) extends 
 
     case d @ TransferRequest(_, receiverId, amount) =>
 
-      if (ownerId == receiverId) {
-        sender ! Status.Failure(GenericDomainException("Sender and receiver are equal"))
+      if (ownerId == receiverId || amount == 0.0) {
+        sender ! Status.Failure(GenericDomainException("Sender and receiver are equal, or amount is zero"))
       }
       else if (ownerId < receiverId) {
         // prevent deadlock by sorting accountIds lexicographically
@@ -130,7 +130,9 @@ class AccountHandlerActor(ownerId: AccountId, persistence: Persistence) extends 
 
     case PersistSuccess(events) =>
       val newState = events.find(_.account == ownerId).get
-      client ! BalanceResponse(newState.account, newState.balance)
+
+      val responseEvent = if (events.size > 1) events.find(_.amount < 0).get else newState
+      client ! BalanceResponse(responseEvent.account, responseEvent.balance)
       context become processingRequests(newState)
       unstashAll()
 
