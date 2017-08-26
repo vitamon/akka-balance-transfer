@@ -1,7 +1,7 @@
 This project is a study to implement balance transfer transaction.
 
 The implementation on the master branch is based on Akka actors and can work with eventually consistent databases
-(if we keep the account actors unique across the system). So it is easy to scale using.
+(if we keep the account actors unique across the system). So it is easy to scale.
 
 Another approach to implement balance transfer transaction could be using Compare and Set pattern with specially calculated transaction ids. 
 This approach heavily relies on database with ACID guarantees (so not easily scalable), 
