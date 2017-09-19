@@ -1,6 +1,6 @@
 CAS+blockchain solution is based on Compare and Set pattern and specially calculated transaction ids. 
-This approach heavily relies on database with ACID guarantees (I'd recommend Google Spanner as it "offers both strong consistency and horizontal scalability" [https://cloud.google.com/spanner/]), 
-but does not require actors, just plain futures, while solving the deadlock problem naturally. 
+This approach heavily relies on database with ACID guarantees ( I'd recommend Google Spanner as it "offers both strong consistency and horizontal scalability" https://cloud.google.com/spanner ), 
+but does not require actors, just plain futures, while solving the deadlock problem naturally. (With Spanner we could just use ol' good transactions though) 
 
 1. We need a database which provides atomic write(list) and unique index for transactionId.
    So it throws if the key already exists.
